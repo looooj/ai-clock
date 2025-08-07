@@ -1,0 +1,43 @@
+void EnterFullscreen(HWND hwnd) {
+    // 去掉标题栏和边框
+    LONG style = GetWindowLong(hwnd, GWL_STYLE);
+    style &= ~(WS_CAPTION | WS_THICKFRAME);
+    SetWindowLong(hwnd, GWL_STYLE, style);
+
+    // 获取当前屏幕分辨率
+    int cx = GetSystemMetrics(SM_CXSCREEN);
+    int cy = GetSystemMetrics(SM_CYSCREEN);
+
+    // 调整窗口位置和大小，确保立即生效
+    SetWindowPos(hwnd,
+                 HWND_TOP,
+                 0, 0,
+                 cx, cy,
+                 SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+
+    // 置顶并激活
+    SetForegroundWindow(hwnd);
+    ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+}
+
+
+case WM_TIMER:
+    if (wParam == IDT_TIMER) {
+        // 刷新显示（保持原样）
+        std::wstring ts = FormatTime(remainingSeconds);
+        SetWindowText(GetDlgItem(hwnd, ID_STATIC_TIME), ts.c_str());
+
+        if (--remainingSeconds < 0) {
+            KillTimer(hwnd, IDT_TIMER);
+
+            // 倒计时结束，切换到全屏并激活窗口
+            EnterFullscreen(hwnd);
+
+            // 提示用户
+            MessageBox(hwnd,
+                       L"倒计时结束！",
+                       L"通知",
+                       MB_OK | MB_ICONINFORMATION);
+        }
+    }
+    break;

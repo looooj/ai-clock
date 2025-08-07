@@ -1,0 +1,69 @@
+// ResultFrame.h
+#include <wx/wx.h>
+#include <sstream>
+#include <iomanip>
+
+class ResultFrame : public wxFrame {
+public:
+    ResultFrame(int totalSeconds, const wxString& inputDesc)
+        : wxFrame(
+            nullptr,
+            wxID_ANY,
+            wxString::FromUTF8("倒计时结果"),
+            wxDefaultPosition,
+            wxDefaultSize)
+    {
+        // 1. 创建面板和主垂直 sizer
+        wxPanel* panel = new wxPanel(this);
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        panel->SetSizer(mainSizer);
+
+        // 2. 上下伸缩，以垂直居中
+        mainSizer->AddStretchSpacer();
+
+        // 3. 横向 sizer：并排放置两个 StaticText
+        wxBoxSizer* hSizer = new wxBoxSizer(wxHORIZONTAL);
+
+        // 格式化总计时字符串
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s =  totalSeconds % 60;
+        std::ostringstream oss;
+        oss << std::setw(2) << std::setfill('0') << h << ":"
+            << std::setw(2) << std::setfill('0') << m << ":"
+            << std::setw(2) << std::setfill('0') << s;
+        wxString totalStr = wxString::FromUTF8(oss.str().c_str());
+
+        // 创建两个居中显示的标签
+        wxStaticText* lblTotal = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("总计时: ") + totalStr);
+        wxStaticText* lblInput = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("输入参数: ") + inputDesc);
+
+        // 并排加入，并在中间留空隙
+        hSizer->Add(lblTotal, 0, wxALIGN_CENTER);
+        hSizer->Add(lblInput, 0, wxALIGN_CENTER | wxLEFT, 50);
+
+        mainSizer->Add(hSizer, 0, wxALIGN_CENTER);
+
+        // 4. 在下方添加“确定”按钮
+        wxButton* btnOk = new wxButton(
+            panel, wxID_OK, wxString::FromUTF8("确定"));
+        mainSizer->Add(btnOk, 0, wxALIGN_CENTER | wxTOP, 30);
+
+        // 5. 下方伸缩，完成垂直居中
+        mainSizer->AddStretchSpacer();
+
+        // 6. 强制布局后再全屏
+        panel->Layout();
+        Layout();
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+
+        // 7. 绑定按钮事件：关闭窗口
+        btnOk->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+            Close();
+        });
+    }
+};

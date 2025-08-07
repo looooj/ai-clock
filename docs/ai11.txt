@@ -1,0 +1,198 @@
+// main.cpp
+#include <wx/wx.h>
+#include <wx/timer.h>
+#include <iomanip>
+#include <sstream>
+
+// 全屏结果窗口
+class ResultFrame : public wxFrame {
+public:
+    ResultFrame(int totalSeconds, const wxString& inputDesc)
+        : wxFrame(nullptr, wxID_ANY,
+                  wxString::FromUTF8("倒计时结果"),
+                  wxDefaultPosition, wxDefaultSize)
+    {
+        // 面板与垂直主 sizer
+        wxPanel* panel = new wxPanel(this);
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        panel->SetSizer(mainSizer);
+
+        // 上部伸缩，用于垂直居中
+        mainSizer->AddStretchSpacer();
+
+        // 横向 sizer，用于左右并排
+        wxBoxSizer* hSizer = new wxBoxSizer(wxHORIZONTAL);
+
+        // 格式化总计时 HH:MM:SS
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s = totalSeconds % 60;
+        std::ostringstream oss;
+        oss << std::setw(2) << std::setfill('0') << h << ":"
+            << std::setw(2) << std::setfill('0') << m << ":"
+            << std::setw(2) << std::setfill('0') << s;
+        wxString totalStr = wxString::FromUTF8(oss.str().c_str());
+
+        // 两个并排标签
+        wxStaticText* lblTotal = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("总计时: ") + totalStr);
+        wxStaticText* lblInput = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("输入参数: ") + inputDesc);
+
+        hSizer->Add(lblTotal, 0, wxALIGN_CENTER);
+        hSizer->Add(lblInput, 0, wxALIGN_CENTER | wxLEFT, 50);
+        mainSizer->Add(hSizer, 0, wxALIGN_CENTER);
+
+        // 底部“确定”按钮
+        wxButton* btnOk = new wxButton(
+            panel, wxID_OK,
+            wxString::FromUTF8("确定"));
+        mainSizer->Add(btnOk, 0, wxALIGN_CENTER | wxTOP, 30);
+
+        // 下部伸缩，完成垂直居中
+        mainSizer->AddStretchSpacer();
+
+        // 完成布局后再全屏
+        panel->Layout();
+        Layout();
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+
+        // 绑定按钮关闭窗口
+        btnOk->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+            Close();
+        });
+    }
+};
+
+// 主倒计时窗口
+class CountdownFrame : public wxFrame {
+public:
+    CountdownFrame()
+        : wxFrame(nullptr, wxID_ANY,
+                  wxString::FromUTF8("倒计时器"),
+                  wxDefaultPosition, wxSize(300, 250)),
+          m_timer(this)
+    {
+        wxPanel* panel = new wxPanel(this);
+        wxBoxSizer* vSizer = new wxBoxSizer(wxVERTICAL);
+        panel->SetSizer(vSizer);
+
+        // 输入区：倒计时分钟
+        wxBoxSizer* inputSizer = new wxBoxSizer(wxHORIZONTAL);
+        inputSizer->Add(new wxStaticText(
+                            panel, wxID_ANY,
+                            wxString::FromUTF8("倒计时 (分钟)：")),
+                        0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+
+        m_minuteCtrl = new wxSpinCtrl(
+            panel, wxID_ANY, wxString::Format("1"),
+            wxDefaultPosition, wxDefaultSize,
+            wxSP_ARROW_KEYS, 1, 1440, 1);
+        inputSizer->Add(m_minuteCtrl, 0, wxALIGN_CENTER_VERTICAL);
+        vSizer->Add(inputSizer, 0,
+                    wxALL | wxALIGN_CENTER, 15);
+
+        // 倒计时文本显示
+        m_displayText = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("00:00"),
+            wxDefaultPosition, wxDefaultSize,
+            wxALIGN_CENTER);
+        m_displayText->SetFont(wxFont(24,
+                                      wxFONTFAMILY_DEFAULT,
+                                      wxFONTSTYLE_NORMAL,
+                                      wxFONTWEIGHT_BOLD));
+        vSizer->Add(m_displayText, 1,
+                    wxEXPAND | wxALL, 10);
+
+        // 按钮区：开始/停止 + 退出
+        wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+        m_btnStart = new wxButton(
+            panel, wxID_ANY,
+            wxString::FromUTF8("开始"));
+        btnSizer->Add(m_btnStart, 0, wxRIGHT, 20);
+
+        wxButton* btnExit = new wxButton(
+            panel, wxID_CANCEL,
+            wxString::FromUTF8("退出"));
+        btnSizer->Add(btnExit, 0);
+
+        vSizer->Add(btnSizer, 0,
+                    wxALIGN_CENTER | wxBOTTOM, 20);
+
+        // 退出按钮关闭程序
+        btnExit->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+            Close();
+        });
+
+        // 开始/停止按钮逻辑
+        m_btnStart->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+            if (m_timer.IsRunning()) {
+                m_timer.Stop();
+                m_btnStart->SetLabel(
+                    wxString::FromUTF8("开始"));
+                m_displayText->SetLabel(
+                    wxString::FromUTF8("00:00"));
+                m_minuteCtrl->Enable(true);
+            } else {
+                m_totalSeconds =
+                    m_minuteCtrl->GetValue() * 60;
+                m_remainingSeconds =
+                    m_totalSeconds;
+                m_inputDesc = wxString::Format(
+                    "%d 分钟",
+                    m_minuteCtrl->GetValue());
+                m_minuteCtrl->Enable(false);
+                m_btnStart->SetLabel(
+                    wxString::FromUTF8("停止"));
+                m_timer.Start(1000);
+            }
+        });
+
+        // 定时器回调：更新显示或弹出结果
+        m_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+            if (--m_remainingSeconds < 0) {
+                m_timer.Stop();
+                Hide();
+                ResultFrame* res =
+                    new ResultFrame(
+                        m_totalSeconds,
+                        m_inputDesc);
+                res->Show();
+            } else {
+                int mm = m_remainingSeconds / 60;
+                int ss = m_remainingSeconds % 60;
+                m_displayText->SetLabel(
+                    wxString::Format("%02d:%02d",
+                                     mm, ss));
+            }
+        });
+
+        Centre();
+        Show();
+    }
+
+private:
+    wxSpinCtrl*   m_minuteCtrl;
+    wxStaticText* m_displayText;
+    wxButton*     m_btnStart;
+    wxTimer       m_timer;
+
+    int           m_totalSeconds;
+    int           m_remainingSeconds;
+    wxString      m_inputDesc;
+};
+
+// 应用入口
+class MyApp : public wxApp {
+public:
+    bool OnInit() override {
+        CountdownFrame* frame = new CountdownFrame();
+        frame->Show(true);
+        return true;
+    }
+};
+
+wxIMPLEMENT_APP(MyApp);

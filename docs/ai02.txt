@@ -1,0 +1,114 @@
+#include <wx/wx.h>
+#include <wx/timer.h>
+#include <ctime>
+
+class CountdownFrame : public wxFrame {
+public:
+    CountdownFrame();
+
+private:
+    void OnStart(wxCommandEvent& evt);
+    void OnTimer(wxTimerEvent& evt);
+    int  ParseTimeString(const wxString& ts);
+
+    wxTextCtrl*   m_txtTarget;
+    wxStaticText* m_lblTime;
+    wxButton*     m_btnStart;
+    wxTimer       m_timer;
+    int           m_remaining;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+enum {
+    ID_BTN_START = wxID_HIGHEST + 1,
+    ID_TIMER
+};
+
+wxBEGIN_EVENT_TABLE(CountdownFrame, wxFrame)
+    EVT_BUTTON(ID_BTN_START, CountdownFrame::OnStart)
+    EVT_TIMER(ID_TIMER,    CountdownFrame::OnTimer)
+wxEND_EVENT_TABLE()
+
+CountdownFrame::CountdownFrame()
+    : wxFrame(nullptr, wxID_ANY, "wxWidgets 倒计时器",
+              wxDefaultPosition, wxSize(300, 150)),
+      m_timer(this, ID_TIMER), m_remaining(0)
+{
+    wxPanel* panel = new wxPanel(this);
+
+    m_txtTarget = new wxTextCtrl(panel, wxID_ANY, "23:10:10",
+        wxPoint(10, 10), wxSize(100, 25));
+
+    m_btnStart = new wxButton(panel, ID_BTN_START, "Start",
+        wxPoint(120, 10), wxSize(60, 25));
+
+    m_lblTime = new wxStaticText(panel, wxID_ANY, "00:00:00",
+        wxPoint(10, 50), wxSize(200, 25));
+}
+
+int CountdownFrame::ParseTimeString(const wxString& ts) {
+    int h, m, s;
+    if (wxSscanf(ts, "%d:%d:%d", &h, &m, &s) != 3 ||
+        h < 0 || h > 23 ||
+        m < 0 || m > 59 ||
+        s < 0 || s > 59) {
+        return -1;
+    }
+    return h * 3600 + m * 60 + s;
+}
+
+void CountdownFrame::OnStart(wxCommandEvent&) {
+    wxString ts = m_txtTarget->GetValue();
+    int target = ParseTimeString(ts);
+    if (target < 0) {
+        wxMessageBox("请输入合法的 HH:MM:SS 格式", "错误",
+                     wxOK | wxICON_ERROR);
+        return;
+    }
+
+    std::time_t now = std::time(nullptr);
+    std::tm* lt    = std::localtime(&now);
+    int current    = lt->tm_hour * 3600 +
+                     lt->tm_min  * 60 +
+                     lt->tm_sec;
+
+    m_remaining = target - current;
+    if (m_remaining < 0)
+        m_remaining += 24 * 3600;
+
+    m_timer.Start(1000);
+}
+
+void CountdownFrame::OnTimer(wxTimerEvent&) {
+    if (m_remaining < 0) return;
+
+    int h = m_remaining / 3600;
+    int m = (m_remaining % 3600) / 60;
+    int s = m_remaining % 60;
+
+    wxString str = wxString::Format("%02d:%02d:%02d", h, m, s);
+    m_lblTime->SetLabel(str);
+
+    if (--m_remaining < 0) {
+        m_timer.Stop();
+
+        // 切换全屏并激活窗口
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+        Raise();
+
+        wxMessageBox("倒计时结束！", "通知",
+                     wxOK | wxICON_INFORMATION);
+    }
+}
+
+class MyApp : public wxApp {
+public:
+    virtual bool OnInit() {
+        CountdownFrame* frame = new CountdownFrame();
+        frame->Show(true);
+        return true;
+    }
+};
+
+wxIMPLEMENT_APP(MyApp);

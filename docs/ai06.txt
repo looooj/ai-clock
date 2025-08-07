@@ -1,0 +1,206 @@
+#include <wx/wx.h>
+#include <wx/timer.h>
+#include <vector>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
+// 全屏结果窗口，显示总计时和输入参数
+class ResultFrame : public wxFrame {
+public:
+    ResultFrame(int totalSeconds, const wxString& inputDesc)
+        : wxFrame(nullptr, wxID_ANY, "倒计时结果",
+                  wxDefaultPosition, wxDefaultSize)
+    {
+        // 切换全屏
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+
+        // 格式化总计时
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s =  totalSeconds % 60;
+        std::ostringstream oss;
+        oss << std::setw(2) << std::setfill('0') << h << ":"
+            << std::setw(2) << std::setfill('0') << m << ":"
+            << std::setw(2) << std::setfill('0') << s;
+        wxString totalStr = wxString::FromUTF8(oss.str());
+
+        // 布局
+        wxPanel* panel = new wxPanel(this);
+        wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+        wxFont font(48, wxFONTFAMILY_DEFAULT,
+                    wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+
+        wxStaticText* lblTotal = new wxStaticText(panel, wxID_ANY,
+            "总计时: " + totalStr);
+        lblTotal->SetFont(font);
+
+        wxStaticText* lblInput = new wxStaticText(panel, wxID_ANY,
+            "输入参数: " + inputDesc);
+        lblInput->SetFont(font);
+
+        sizer->Add(lblTotal, 1, wxALIGN_CENTER | wxALL, 20);
+        sizer->Add(lblInput, 1, wxALIGN_CENTER | wxALL, 20);
+        panel->SetSizer(sizer);
+    }
+};
+
+// 主倒计时窗口（两种输入模式）
+class CountdownFrame : public wxFrame {
+public:
+    CountdownFrame();
+
+private:
+    void OnModeChange(wxCommandEvent& evt);
+    void OnStart(wxCommandEvent& evt);
+    void OnTimer(wxTimerEvent& evt);
+
+    wxRadioBox*   m_radioMode;
+    wxChoice*     m_choiceHour;
+    wxChoice*     m_choiceMin;
+    wxChoice*     m_choiceSec;
+    wxComboBox*   m_comboMin;
+    wxButton*     m_btnStart;
+    wxStaticText* m_lblTime;
+    wxTimer       m_timer;
+
+    int           m_remaining;
+    int           m_total;
+    wxString      m_inputDesc;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+enum {
+    ID_RADIO_MODE = wxID_HIGHEST + 1,
+    ID_BTN_START,
+    ID_TIMER
+};
+
+wxBEGIN_EVENT_TABLE(CountdownFrame, wxFrame)
+    EVT_RADIOBOX(ID_RADIO_MODE, CountdownFrame::OnModeChange)
+    EVT_BUTTON(ID_BTN_START,   CountdownFrame::OnStart)
+    EVT_TIMER(ID_TIMER,        CountdownFrame::OnTimer)
+wxEND_EVENT_TABLE()
+
+CountdownFrame::CountdownFrame()
+    : wxFrame(nullptr, wxID_ANY, "倒计时（两种输入模式）",
+              wxDefaultPosition, wxSize(360, 250)),
+      m_timer(this, ID_TIMER),
+      m_remaining(0), m_total(0)
+{
+    wxPanel* panel = new wxPanel(this);
+
+    // 模式选择
+    wxString modes[] = { "输入时间", "倒计时分钟" };
+    m_radioMode = new wxRadioBox(panel, ID_RADIO_MODE,
+                                 "模式选择", wxPoint(10, 10),
+                                 wxDefaultSize, 2, modes);
+
+    // 时间下拉框
+    std::vector<wxString> hours, mins, secs;
+    for (int i = 0; i < 24; ++i) hours.push_back(wxString::Format("%02d", i));
+    for (int i = 0; i < 60; ++i) {
+        mins.push_back(wxString::Format("%02d", i));
+        secs.push_back(wxString::Format("%02d", i));
+    }
+    m_choiceHour = new wxChoice(panel, wxID_ANY, wxPoint(20, 70),
+                                wxSize(60, 25), hours.size(), hours.data());
+    m_choiceMin  = new wxChoice(panel, wxID_ANY, wxPoint(90, 70),
+                                wxSize(60, 25), mins.size(), mins.data());
+    m_choiceSec  = new wxChoice(panel, wxID_ANY, wxPoint(160, 70),
+                                wxSize(60, 25), secs.size(), secs.data());
+
+    // 默认当前时分秒
+    {
+        std::time_t now = std::time(nullptr);
+        std::tm* lt     = std::localtime(&now);
+        m_choiceHour->SetSelection(lt->tm_hour);
+        m_choiceMin ->SetSelection(lt->tm_min);
+        m_choiceSec ->SetSelection(lt->tm_sec);
+    }
+
+    // 分钟预设
+    wxString presets[] = { "5", "10", "15", "20", "30", "60" };
+    m_comboMin = new wxComboBox(panel, wxID_ANY, "5",
+                                wxPoint(20, 110), wxSize(80, 25),
+                                WXSIZEOF(presets), presets,
+                                wxCB_READONLY);
+
+    // 启动 & 显示
+    m_btnStart = new wxButton(panel, ID_BTN_START, "Start",
+                              wxPoint(230, 90), wxSize(80, 30));
+    m_lblTime  = new wxStaticText(panel, wxID_ANY, "00:00:00",
+                                  wxPoint(20, 160), wxSize(200, 30));
+
+    m_comboMin->Hide();
+}
+
+void CountdownFrame::OnModeChange(wxCommandEvent& evt)
+{
+    bool timeMode = (m_radioMode->GetSelection() == 0);
+    m_choiceHour->Show(timeMode);
+    m_choiceMin ->Show(timeMode);
+    m_choiceSec ->Show(timeMode);
+    m_comboMin  ->Show(!timeMode);
+    Layout();
+}
+
+void CountdownFrame::OnStart(wxCommandEvent&)
+{
+    int mode = m_radioMode->GetSelection();
+    if (mode == 0) {
+        int h = m_choiceHour->GetSelection();
+        int m = m_choiceMin ->GetSelection();
+        int s = m_choiceSec ->GetSelection();
+        m_inputDesc = wxString::Format("%02d:%02d:%02d", h, m, s);
+        int target = h * 3600 + m * 60 + s;
+
+        std::time_t now = std::time(nullptr);
+        std::tm* lt     = std::localtime(&now);
+        int current    = lt->tm_hour * 3600 +
+                         lt->tm_min  * 60 +
+                         lt->tm_sec;
+        m_remaining = target - current;
+        if (m_remaining < 0) m_remaining += 24 * 3600;
+    }
+    else {
+        long mins = 0;
+        m_comboMin->GetValue().ToLong(&mins);
+        m_remaining = static_cast<int>(mins * 60);
+        m_inputDesc = wxString::Format("%ld 分钟", mins);
+    }
+
+    m_total = m_remaining;
+    m_timer.Start(1000);
+}
+
+void CountdownFrame::OnTimer(wxTimerEvent&)
+{
+    if (m_remaining < 0) return;
+
+    int h = m_remaining / 3600;
+    int m = (m_remaining % 3600) / 60;
+    int s =  m_remaining % 60;
+    m_lblTime->SetLabel(wxString::Format("%02d:%02d:%02d", h, m, s));
+
+    if (--m_remaining < 0) {
+        m_timer.Stop();
+        Hide();
+
+        // 弹出全屏结果窗口
+        ResultFrame* res = new ResultFrame(m_total, m_inputDesc);
+        res->Show();
+    }
+}
+
+class MyApp : public wxApp {
+public:
+    bool OnInit() override {
+        CountdownFrame* frame = new CountdownFrame();
+        frame->Show(true);
+        return true;
+    }
+};
+
+wxIMPLEMENT_APP(MyApp);

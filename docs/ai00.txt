@@ -1,0 +1,131 @@
+#include <windows.h>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
+
+#define ID_EDIT_TARGET   101
+#define ID_BUTTON_START  102
+#define ID_STATIC_TIME   103
+#define IDT_TIMER        1
+
+int remainingSeconds = 0;
+
+// 将秒数转换成 "HH:MM:SS"
+std::wstring FormatTime(int sec) {
+    int h = sec / 3600;
+    int m = (sec % 3600) / 60;
+    int s = sec % 60;
+    std::wstringstream ss;
+    ss << std::setw(2) << std::setfill(L'0') << h << L":"
+       << std::setw(2) << std::setfill(L'0') << m << L":"
+       << std::setw(2) << std::setfill(L'0') << s;
+    return ss.str();
+}
+
+// 解析 "HH:MM:SS" 到总秒数，失败返回 -1
+int ParseTimeString(const std::wstring& ts) {
+    int h, m, s;
+    if (swscanf_s(ts.c_str(), L"%d:%d:%d", &h, &m, &s) != 3
+        || h < 0 || h > 23
+        || m < 0 || m > 59
+        || s < 0 || s > 59) {
+        return -1;
+    }
+    return h * 3600 + m * 60 + s;
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM) {
+    switch (msg) {
+    case WM_CREATE:
+        CreateWindow(L"EDIT", L"23:10:10",
+                     WS_CHILD | WS_VISIBLE | WS_BORDER,
+                     10, 10, 120, 25,
+                     hwnd, (HMENU)ID_EDIT_TARGET, NULL, NULL);
+        CreateWindow(L"BUTTON", L"Start",
+                     WS_CHILD | WS_VISIBLE,
+                     140, 10, 60, 25,
+                     hwnd, (HMENU)ID_BUTTON_START, NULL, NULL);
+        CreateWindow(L"STATIC", L"00:00:00",
+                     WS_CHILD | WS_VISIBLE,
+                     10, 50, 190, 25,
+                     hwnd, (HMENU)ID_STATIC_TIME, NULL, NULL);
+        break;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == ID_BUTTON_START) {
+            wchar_t buf[16] = {0};
+            GetWindowText(GetDlgItem(hwnd, ID_EDIT_TARGET),
+                          buf, _countof(buf));
+            int targetSec = ParseTimeString(buf);
+            if (targetSec < 0) {
+                MessageBox(hwnd, L"请输入合法的 HH:MM:SS 格式", L"错误", MB_OK | MB_ICONERROR);
+                break;
+            }
+
+            // 计算当前当日秒数
+            std::time_t tn = std::time(nullptr);
+            std::tm* lt = std::localtime(&tn);
+            int nowSec = lt->tm_hour * 3600 + lt->tm_min * 60 + lt->tm_sec;
+
+            remainingSeconds = targetSec - nowSec;
+            if (remainingSeconds < 0)
+                remainingSeconds += 24 * 3600;
+
+            // 启动 1秒定时器
+            SetTimer(hwnd, IDT_TIMER, 1000, NULL);
+        }
+        break;
+
+    case WM_TIMER:
+        if (wParam == IDT_TIMER) {
+            // 刷新显示
+            std::wstring ts = FormatTime(remainingSeconds);
+            SetWindowText(GetDlgItem(hwnd, ID_STATIC_TIME), ts.c_str());
+
+            if (--remainingSeconds < 0) {
+                KillTimer(hwnd, IDT_TIMER);
+                MessageBox(hwnd, L"倒计时结束！", L"通知", MB_OK | MB_ICONINFORMATION);
+            }
+        }
+        break;
+
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        break;
+
+    default:
+        return DefWindowProc(hwnd, msg, wParam, NULL);
+    }
+    return 0;
+}
+
+int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow) {
+    const wchar_t CLASS_NAME[] = L"CountdownWindow";
+
+    WNDCLASS wc = {};
+    wc.lpfnWndProc   = WndProc;
+    wc.hInstance     = hInst;
+    wc.lpszClassName = CLASS_NAME;
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+
+    RegisterClass(&wc);
+
+    HWND hwnd = CreateWindowEx(
+        0,
+        CLASS_NAME,
+        L"Win32 倒计时器",
+        WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME, 
+        CW_USEDEFAULT, CW_USEDEFAULT, 230, 130,
+        NULL, NULL, hInst, NULL);
+
+    ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+
+    MSG msg = {};
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    return 0;
+}

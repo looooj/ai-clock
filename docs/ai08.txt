@@ -1,0 +1,68 @@
+class ResultFrame : public wxFrame {
+public:
+    ResultFrame(int totalSeconds, const wxString& inputDesc)
+        : wxFrame(nullptr, wxID_ANY, wxString::FromUTF8("倒计时结果"),
+                  wxDefaultPosition, wxDefaultSize)
+    {
+        // 1. 不用额外面板，直接用 Frame 本身做容器
+        wxBoxSizer* frameSizer = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText* lblTotal = new wxStaticText(
+            this, wxID_ANY,
+            wxString::FromUTF8("总计时: ") +
+            wxString::Format("%02d:%02d:%02d",
+                             totalSeconds/3600,
+                             (totalSeconds%3600)/60,
+                             totalSeconds%60));
+        wxStaticText* lblInput = new wxStaticText(
+            this, wxID_ANY,
+            wxString::FromUTF8("输入参数: ") + inputDesc);
+
+        frameSizer->Add(lblTotal, 1, wxALIGN_CENTER | wxALL, 20);
+        frameSizer->Add(lblInput, 1, wxALIGN_CENTER | wxALL, 20);
+
+        SetSizer(frameSizer);
+        frameSizer->SetSizeHints(this);  // 设置最小尺寸并触发行尺寸调整
+
+        Layout();                        // 做一次完整布局
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+    }
+};
+
+
+
+
+class ResultFrame : public wxFrame {
+public:
+    ResultFrame(int totalSeconds, const wxString& inputDesc)
+        : wxFrame(nullptr, wxID_ANY, wxString::FromUTF8("倒计时结果"),
+                  wxDefaultPosition, wxDefaultSize)
+    {
+        // 1. 创建面板和 Sizer
+        wxPanel* panel = new wxPanel(this);
+        wxBoxSizer* vsizer = new wxBoxSizer(wxVERTICAL);
+
+        // 2. 生成两个 StaticText
+        wxStaticText* lblTotal = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("总计时: ") +
+            wxString::Format("%02d:%02d:%02d",
+                             totalSeconds/3600,
+                             (totalSeconds%3600)/60,
+                             totalSeconds%60));
+        wxStaticText* lblInput = new wxStaticText(
+            panel, wxID_ANY,
+            wxString::FromUTF8("输入参数: ") + inputDesc);
+
+        // 3. 加入 Sizer 并生效
+        vsizer->Add(lblTotal, 1, wxALIGN_CENTER | wxALL, 20);
+        vsizer->Add(lblInput, 1, wxALIGN_CENTER | wxALL, 20);
+        panel->SetSizer(vsizer);
+
+        // 4. 确保完成一次布局
+        this->Layout();    // 或 panel->Layout();
+
+        // 5. 最后再全屏显示
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+    }
+};

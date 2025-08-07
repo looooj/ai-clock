@@ -1,0 +1,163 @@
+#include <wx/wx.h>
+#include <wx/timer.h>
+#include <vector>
+
+class CountdownFrame : public wxFrame {
+public:
+    CountdownFrame();
+
+private:
+    void OnModeChange(wxCommandEvent& evt);
+    void OnStart(wxCommandEvent& evt);
+    void OnTimer(wxTimerEvent& evt);
+
+    wxRadioBox*    m_radioMode;
+    wxChoice*      m_choiceHour;
+    wxChoice*      m_choiceMin;
+    wxChoice*      m_choiceSec;
+    wxComboBox*    m_comboMin;
+    wxButton*      m_btnStart;
+    wxStaticText*  m_lblTime;
+    wxTimer        m_timer;
+    int            m_remaining;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+enum {
+    ID_RADIO_MODE = wxID_HIGHEST + 1,
+    ID_BTN_START,
+    ID_TIMER
+};
+
+wxBEGIN_EVENT_TABLE(CountdownFrame, wxFrame)
+    EVT_RADIOBOX(ID_RADIO_MODE, CountdownFrame::OnModeChange)
+    EVT_BUTTON(ID_BTN_START,  CountdownFrame::OnStart)
+    EVT_TIMER(ID_TIMER,       CountdownFrame::OnTimer)
+wxEND_EVENT_TABLE()
+
+CountdownFrame::CountdownFrame()
+    : wxFrame(nullptr, wxID_ANY, "倒计时（两种输入模式）", wxDefaultPosition, wxSize(360, 250)),
+      m_timer(this, ID_TIMER),
+      m_remaining(0)
+{
+    wxPanel* panel = new wxPanel(this);
+
+    // 1. 模式选择：具体时间 vs 倒计时分钟
+    wxString modes[] = { "输入时间", "倒计时分钟" };
+    m_radioMode = new wxRadioBox(panel, ID_RADIO_MODE, "模式选择",
+                                 wxPoint(10, 10), wxDefaultSize, 2, modes);
+
+    // 2. 时间输入：时/分/秒 下拉框
+    std::vector<wxString> hours, mins, secs;
+    for (int i = 0; i < 24; ++i) hours.push_back(wxString::Format("%02d", i));
+    for (int i = 0; i < 60; ++i) {
+        mins.push_back(wxString::Format("%02d", i));
+        secs.push_back(wxString::Format("%02d", i));
+    }
+    m_choiceHour = new wxChoice(panel, wxID_ANY, wxPoint(20, 70),
+                                wxSize(60, 25), hours.size(), hours.data());
+    m_choiceMin  = new wxChoice(panel, wxID_ANY, wxPoint(90, 70),
+                                wxSize(60, 25), mins.size(), mins.data());
+    m_choiceSec  = new wxChoice(panel, wxID_ANY, wxPoint(160, 70),
+                                wxSize(60, 25), secs.size(), secs.data());
+
+    // 默认当前时间
+    {
+        std::time_t now = std::time(nullptr);
+        std::tm* lt    = std::localtime(&now);
+        m_choiceHour->SetSelection(lt->tm_hour);
+        m_choiceMin ->SetSelection(lt->tm_min);
+        m_choiceSec ->SetSelection(lt->tm_sec);
+    }
+
+    // 3. 倒计时分钟输入：wxComboBox 预设值
+    wxString presets[] = { "5", "10", "15", "20", "30", "60" };
+    m_comboMin = new wxComboBox(panel, wxID_ANY, "5",
+                                wxPoint(20, 110), wxSize(80, 25),
+                                WXSIZEOF(presets), presets,
+                                wxCB_READONLY);
+
+    // 4. 启动按钮与显示
+    m_btnStart = new wxButton(panel, ID_BTN_START, "Start",
+                              wxPoint(230, 90), wxSize(80, 30));
+    m_lblTime  = new wxStaticText(panel, wxID_ANY, "00:00:00",
+                                  wxPoint(20, 160), wxSize(200, 30));
+
+    // 初始只显示“输入时间”控件
+    m_comboMin->Hide();
+}
+
+void CountdownFrame::OnModeChange(wxCommandEvent& evt)
+{
+    int mode = m_radioMode->GetSelection();
+    bool timeMode = (mode == 0);
+
+    m_choiceHour->Show(timeMode);
+    m_choiceMin ->Show(timeMode);
+    m_choiceSec ->Show(timeMode);
+
+    m_comboMin  ->Show(!timeMode);
+
+    Layout();  // 重新布局使控件显示/隐藏生效
+}
+
+void CountdownFrame::OnStart(wxCommandEvent&)
+{
+    int mode = m_radioMode->GetSelection();
+    if (mode == 0) {
+        // 具体时间输入
+        int h = m_choiceHour->GetSelection();
+        int m = m_choiceMin ->GetSelection();
+        int s = m_choiceSec ->GetSelection();
+
+        // 计算目标当日秒数
+        int target = h * 3600 + m * 60 + s;
+
+        // 当前秒数
+        std::time_t now = std::time(nullptr);
+        std::tm* lt    = std::localtime(&now);
+        int current    = lt->tm_hour * 3600 +
+                         lt->tm_min  * 60 +
+                         lt->tm_sec;
+
+        m_remaining = target - current;
+        if (m_remaining < 0) m_remaining += 24 * 3600;
+    }
+    else {
+        // 倒计时分钟输入
+        long mins = 0;
+        m_comboMin->GetValue().ToLong(&mins);
+        m_remaining = static_cast<int>(mins * 60);
+    }
+
+    m_timer.Start(1000);
+}
+
+void CountdownFrame::OnTimer(wxTimerEvent&)
+{
+    if (m_remaining < 0) return;
+
+    int h = m_remaining / 3600;
+    int m = (m_remaining % 3600) / 60;
+    int s =  m_remaining % 60;
+    m_lblTime->SetLabel(wxString::Format("%02d:%02d:%02d", h, m, s));
+
+    if (--m_remaining < 0) {
+        m_timer.Stop();
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+        Raise();
+        wxMessageBox("倒计时结束！", "通知", wxOK | wxICON_INFORMATION);
+    }
+}
+
+class MyApp : public wxApp {
+public:
+    virtual bool OnInit() {
+        auto* frame = new CountdownFrame();
+        frame->Show(true);
+        return true;
+    }
+};
+
+wxIMPLEMENT_APP(MyApp);

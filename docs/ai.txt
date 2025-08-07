@@ -1,0 +1,128 @@
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+void countdown(int seconds) {
+    for (int i = seconds; i >= 0; --i) {
+        // 清除当前行并输出剩余时间
+        std::cout << "\r倒计时: " << i << " 秒   " << std::flush;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    std::cout << "\n倒计时结束！\n";
+}
+
+int main() {
+    int seconds;
+    std::cout << "请输入倒计时秒数: ";
+    std::cin >> seconds;
+
+    if (seconds > 0) {
+        countdown(seconds);
+    } else {
+        std::cout << "请输入大于 0 的整数。\n";
+    }
+
+    return 0;
+}
+
+
+#include <iostream>
+#include <chrono>
+#include <thread>
+#include <iomanip>  // 用于 std::setw 和 std::setfill
+
+void countdown(int total_seconds) {
+    for (int remaining = total_seconds; remaining >= 0; --remaining) {
+        int hours   = remaining / 3600;
+        int minutes = (remaining % 3600) / 60;
+        int seconds = remaining % 60;
+
+        // 格式化输出为 HH:MM:SS
+        std::cout << "\r倒计时: "
+                  << std::setw(2) << std::setfill('0') << hours   << ":"
+                  << std::setw(2) << std::setfill('0') << minutes << ":"
+                  << std::setw(2) << std::setfill('0') << seconds << std::flush;
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    std::cout << "\n倒计时结束！\n";
+}
+
+int main() {
+    int seconds;
+    std::cout << "请输入倒计时的总秒数: ";
+    std::cin >> seconds;
+
+    if (seconds > 0) {
+        countdown(seconds);
+    } else {
+        std::cout << "请输入一个大于 0 的整数秒数。\n";
+    }
+
+    return 0;
+}
+
+
+#include <iostream>
+#include <chrono>
+#include <thread>
+#include <iomanip>
+#include <string>
+#include <ctime>
+
+void countdown(int total_seconds) {
+    for (int remaining = total_seconds; remaining >= 0; --remaining) {
+        int hours   = remaining / 3600;
+        int minutes = (remaining % 3600) / 60;
+        int seconds = remaining % 60;
+
+        std::cout << "\r倒计时: "
+                  << std::setw(2) << std::setfill('0') << hours   << ":"
+                  << std::setw(2) << std::setfill('0') << minutes << ":"
+                  << std::setw(2) << std::setfill('0') << seconds << std::flush;
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    std::cout << "\n倒计时结束！\n";
+}
+
+int parseTimeString(const std::string& ts) {
+    int h, m, s;
+    if (std::sscanf(ts.c_str(), "%d:%d:%d", &h, &m, &s) != 3
+        || h < 0 || h > 23
+        || m < 0 || m > 59
+        || s < 0 || s > 59) {
+        return -1; // 解析失败
+    }
+    return h * 3600 + m * 60 + s;
+}
+
+int main() {
+    std::string target;
+    std::cout << "请输入目标时间 (格式 HH:MM:SS): ";
+    std::cin  >> target;
+
+    int target_seconds = parseTimeString(target);
+    if (target_seconds < 0) {
+        std::cout << "输入格式错误，请使用 HH:MM:SS。\n";
+        return 1;
+    }
+
+    // 获取当前本地时间的秒数值
+    std::time_t now = std::time(nullptr);
+    std::tm* lt     = std::localtime(&now);
+    int current_seconds = lt->tm_hour * 3600
+                        + lt->tm_min  * 60
+                        + lt->tm_sec;
+
+    // 计算到目标时间的秒数差，若已过则加一天
+    int diff = target_seconds - current_seconds;
+    if (diff < 0) {
+        diff += 24 * 3600;
+    }
+
+    countdown(diff);
+    return 0;
+}
+
+

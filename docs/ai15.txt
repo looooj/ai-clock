@@ -1,0 +1,228 @@
+#include <QApplication>
+#include <QWidget>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QRadioButton>
+#include <QButtonGroup>
+#include <QTimeEdit>
+#include <QSpinBox>
+#include <QLabel>
+#include <QPushButton>
+#include <QTimer>
+#include <QTime>
+
+// 全屏结果窗口
+class ResultWindow : public QWidget {
+    Q_OBJECT
+public:
+    ResultWindow(int totalSeconds, const QString& inputDesc) {
+        setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+        showFullScreen();
+
+        auto* mainV = new QVBoxLayout(this);
+        mainV->addStretch();
+
+        auto* hLayout = new QHBoxLayout();
+        auto formatTime = [](int secs) {
+            int h = secs/3600, m = (secs%3600)/60, s = secs%60;
+            return QString("%1:%2:%3")
+                .arg(h,2,10,QChar('0'))
+                .arg(m,2,10,QChar('0'))
+                .arg(s,2,10,QChar('0'));
+        };
+
+        auto* lblTotal = new QLabel("总计时: " + formatTime(totalSeconds));
+        auto* lblInput = new QLabel("输入参数: " + inputDesc);
+        QFont f; f.setPointSize(48); f.setBold(true);
+        lblTotal->setFont(f);
+        lblInput->setFont(f);
+
+        hLayout->addWidget(lblTotal, 0, Qt::AlignCenter);
+        hLayout->addSpacing(50);
+        hLayout->addWidget(lblInput, 0, Qt::AlignCenter);
+        mainV->addLayout(hLayout);
+
+        mainV->addSpacing(30);
+        auto* btnOk = new QPushButton("确定");
+        btnOk->setFixedSize(200,80);
+        QFont fb; fb.setPointSize(24);
+        btnOk->setFont(fb);
+        mainV->addWidget(btnOk, 0, Qt::AlignCenter);
+        mainV->addStretch();
+
+        connect(btnOk, &QPushButton::clicked, this, [this](){
+            emit finished();
+            close();
+        });
+    }
+
+signals:
+    void finished();
+};
+
+// 主倒计时窗口
+class MainWindow : public QWidget {
+    Q_OBJECT
+public:
+    MainWindow() {
+        setWindowTitle("倒计时器");
+        resize(400,300);
+
+        auto* mainV = new QVBoxLayout(this);
+
+        // 模式选择
+        auto* timeRB   = new QRadioButton("结束时间");
+        auto* minuteRB = new QRadioButton("分钟倒计时");
+        timeRB->setChecked(false);
+        minuteRB->setChecked(true);
+
+        buttonGroup = new QButtonGroup(this);
+        buttonGroup->addButton(timeRB,   0);
+        buttonGroup->addButton(minuteRB, 1);
+
+        auto* modeH = new QHBoxLayout();
+        modeH->addWidget(timeRB);
+        modeH->addWidget(minuteRB);
+        mainV->addLayout(modeH);
+
+        // 结束时间选择
+        timeEdit = new QTimeEdit(QTime::currentTime());
+        timeEdit->setDisplayFormat("HH:mm:ss");
+        mainV->addWidget(timeEdit, 0, Qt::AlignCenter);
+
+        // 分钟倒计时输入
+        minuteSpin = new QSpinBox();
+        minuteSpin->setRange(1,1440);
+        minuteSpin->setValue(1);
+        mainV->addWidget(minuteSpin, 0, Qt::AlignCenter);
+
+        // 倒计时显示
+        countLabel = new QLabel("00:00:00");
+        QFont cf = countLabel->font();
+        cf.setPointSize(24);
+        cf.setBold(true);
+        countLabel->setFont(cf);
+        countLabel->setAlignment(Qt::AlignCenter);
+        mainV->addWidget(countLabel, 1);
+
+        // 按钮
+        auto* btnH = new QHBoxLayout();
+        startBtn = new QPushButton("开始");
+        auto* exitBtn = new QPushButton("退出");
+        btnH->addWidget(startBtn);
+        btnH->addWidget(exitBtn);
+        mainV->addLayout(btnH);
+
+        // 默认隐藏结束时间控件
+        timeEdit->hide();
+
+        // 信号
+        connect(buttonGroup, QOverload<int>::of(&QButtonGroup::buttonClicked),
+                this, &MainWindow::onModeChanged);
+        connect(startBtn, &QPushButton::clicked,
+                this, &MainWindow::onStartStop);
+        connect(exitBtn,  &QPushButton::clicked,
+                qApp,      &QApplication::quit);
+
+        timer = new QTimer(this);
+        connect(timer, &QTimer::timeout,
+                this,  &MainWindow::onTimeout);
+    }
+
+private slots:
+    void onModeChanged(int id) {
+        if (id==0) {           // 结束时间
+            timeEdit->show();
+            minuteSpin->hide();
+        } else {               // 分钟倒计时
+            timeEdit->hide();
+            minuteSpin->show();
+        }
+    }
+
+    void onStartStop() {
+        if (timer->isActive()) {
+            timer->stop();
+            startBtn->setText("开始");
+            timeEdit->setEnabled(true);
+            minuteSpin->setEnabled(true);
+            countLabel->setText("00:00:00");
+            return;
+        }
+
+        // 计算总秒数、描述
+        if (buttonGroup->checkedId()==0) {
+            QTime now    = QTime::currentTime();
+            QTime target = timeEdit->time();
+            int secs = now.secsTo(target);
+            if (secs<=0) secs += 24*3600;
+            totalSecs = secs;
+            inputDesc = target.toString("HH:mm:ss");
+        } else {
+            int m = minuteSpin->value();
+            totalSecs = m*60;
+            inputDesc = QString("%1 分钟").arg(m);
+        }
+
+        remainSecs = totalSecs;
+        timeEdit->setEnabled(false);
+        minuteSpin->setEnabled(false);
+        startBtn->setText("停止");
+        timer->start(1000);
+    }
+
+    void onTimeout() {
+        remainSecs--;
+        if (remainSecs<0) {
+            timer->stop();
+            hide();
+            auto* rw = new ResultWindow(totalSecs, inputDesc);
+            connect(rw, &ResultWindow::finished,
+                    this, &QWidget::show);
+            rw->show();
+            return;
+        }
+        int h = remainSecs/3600;
+        int m = (remainSecs%3600)/60;
+        int s =  remainSecs%60;
+        countLabel->setText(
+            QString("%1:%2:%3")
+            .arg(h,2,10,QChar('0'))
+            .arg(m,2,10,QChar('0'))
+            .arg(s,2,10,QChar('0'))
+        );
+    }
+
+private:
+    QButtonGroup* buttonGroup;
+    QTimeEdit*    timeEdit;
+    QSpinBox*     minuteSpin;
+    QLabel*       countLabel;
+    QPushButton*  startBtn;
+    QTimer*       timer;
+    int           totalSecs{0}, remainSecs{0};
+    QString       inputDesc;
+};
+
+int main(int argc, char *argv[]) {
+    QApplication a(argc, argv);
+    MainWindow w;
+    w.show();
+    return a.exec();
+}
+
+#include "main.moc"
+
+
+cmake_minimum_required(VERSION 3.5)
+project(CountdownQt5 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+find_package(Qt5 COMPONENTS Widgets REQUIRED)
+
+add_executable(CountdownQt5 main.cpp)
+
+target_link_libraries(CountdownQt5 PRIVATE Qt5::Widgets)

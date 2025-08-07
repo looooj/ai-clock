@@ -1,0 +1,99 @@
+#include "CountdownFrame.h"
+#include "ResultFrame.h"  // 前面已实现的结果窗口
+
+wxBEGIN_EVENT_TABLE(CountdownFrame, wxFrame)
+    EVT_BUTTON(wxID_ANY, CountdownFrame::OnStart)
+    EVT_TIMER(wxID_ANY, CountdownFrame::OnTimer)
+wxEND_EVENT_TABLE()
+
+CountdownFrame::CountdownFrame()
+    : wxFrame(nullptr, wxID_ANY, "倒计时器", wxDefaultPosition, wxSize(300, 250)),
+      m_timer(this, wxID_ANY)
+{
+    // 1. 主面板 + 垂直布局
+    wxPanel* panel = new wxPanel(this);
+    wxBoxSizer* vSizer = new wxBoxSizer(wxVERTICAL);
+    panel->SetSizer(vSizer);
+
+    // 2. 输入区：倒计时分钟
+    wxBoxSizer* inputSizer = new wxBoxSizer(wxHORIZONTAL);
+    inputSizer->Add(new wxStaticText(panel, wxID_ANY, "倒计时 (分钟)："),
+                    0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    m_minuteCtrl = new wxSpinCtrl(panel, wxID_ANY);
+    m_minuteCtrl->SetRange(1, 1440);
+    m_minuteCtrl->SetValue(1);
+    inputSizer->Add(m_minuteCtrl, 0, wxALIGN_CENTER_VERTICAL);
+    vSizer->Add(inputSizer, 0, wxALL | wxALIGN_CENTER, 15);
+
+    // 3. 倒计时显示
+    m_displayText = new wxStaticText(panel, wxID_ANY, "00:00", wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+    m_displayText->SetFont(wxFont(24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+    vSizer->Add(m_displayText, 1, wxEXPAND | wxALL, 10);
+
+    // 4. 按钮区
+    wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_btnStart = new wxButton(panel, wxID_ANY, "开始");
+    btnSizer->Add(m_btnStart, 0, wxRIGHT, 20);
+    btnSizer->Add(new wxButton(panel, wxID_CANCEL, "退出"));
+    vSizer->Add(btnSizer, 0, wxALIGN_CENTER | wxBOTTOM, 20);
+
+    // 5. 绑定“退出”按钮关闭窗口
+    Bind(wxEVT_BUTTON, [this](wxCommandEvent& e){
+        Close();
+    }, wxID_CANCEL);
+
+    Centre();
+    Show();
+}
+
+void CountdownFrame::OnStart(wxCommandEvent& evt)
+{
+    if (m_timer.IsRunning())
+    {
+        // 如果正在倒计时，停止并恢复界面
+        m_timer.Stop();
+        m_btnStart->SetLabel("开始");
+        m_displayText->SetLabel("00:00");
+        m_minuteCtrl->Enable();
+        return;
+    }
+
+    // 以分钟为单位初始化秒数
+    m_totalSeconds     = m_minuteCtrl->GetValue() * 60;
+    m_remainingSeconds = m_totalSeconds;
+
+    // 禁用输入，切换开始/停止按钮标签
+    m_minuteCtrl->Enable(false);
+    m_btnStart->SetLabel("停止");
+
+    // 启动 1 秒定时器
+    m_timer.Start(1000);
+}
+
+void CountdownFrame::OnTimer(wxTimerEvent& evt)
+{
+    // 更新剩余
+    m_remainingSeconds--;
+    int mm = m_remainingSeconds / 60;
+    int ss = m_remainingSeconds % 60;
+
+    // 更新显示
+    m_displayText->SetLabel(wxString::Format("%02d:%02d", mm, ss));
+
+    if (m_remainingSeconds <= 0)
+    {
+        m_timer.Stop();
+
+        // 隐藏主窗口
+        Hide();
+
+        // 弹出结果窗口，并传递总秒数和分钟参数
+        ResultFrame* result = new ResultFrame(m_totalSeconds,
+                                              wxString::Format("%d 分钟", m_totalSeconds/60));
+        result->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){
+            // 用户点击“确定”后，关闭结果并恢复主窗口
+            Show();
+        }, wxID_OK);
+        result->Show();
+    }
+}
