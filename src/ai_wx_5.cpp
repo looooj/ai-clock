@@ -58,7 +58,7 @@ public:
     void OnTimer(wxTimerEvent&) {
 
         HWND hwnd = GetHWND();
-        SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
         SetForegroundWindow(hwnd);
         m_time_count--;
         if (m_time_count < 0) {
@@ -170,6 +170,7 @@ private:
             m_btnStart->SetLabel(wxString::FromUTF8("开始"));
             m_timePicker->Enable(true);
             m_minuteCtrl->Enable(true);
+            OnModeSwitch(wxCommandEvent());
             return;
         }
 
